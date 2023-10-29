@@ -4,93 +4,47 @@ import { stripCodePrefix, formatPrice } from '../../helpers/helpers';
 import ReactPaginate from 'react-paginate';
 import RecordsPerPageSelect from '../Records/RecordsPerPageSelect';
 
-function Orders() {
-  // Loading a data
+const OrdersTable = () => {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState('');
+  const [totalItems, setTotalItems] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTermTemp, setSearchTermTemp] = useState('');
 
-  // Vyhledávání
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResult, setSearchResult] = useState([]);
-
-  // Stránkování
-  const [recordsPerPage, setRecordsPerPage] = useState(5);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const startIndex = currentPage * recordsPerPage;
-
-  const handleRecordsPerPageChange = (newRecordsPerPage) => {
-    setRecordsPerPage(newRecordsPerPage);
-    setCurrentPage(0);
+  const handleRecordsPerPageChange = (newItemsPerPage) => {
+    setItemsPerPage(newItemsPerPage);
+    setPage(1);
   };
 
-  // Funkce pro fulltextové vyhledávání
-  const handleSearch = async () => {
+  const fetchData = async (page, itemsPerPage, searchTerm) => {
     try {
-      setLoading(true);
-      setCurrentPage(0);
       const response = await axios.get(
-        `http://localhost:3000/api/objednavky/prijate/vyhledane`,
-        {
-          params: {
-            searchQuery: searchQuery,
-          },
-        },
+        `http://localhost:3000/api/objednavky/prijate?page=${page}&perPage=${itemsPerPage}&search=${searchTerm}`,
       );
-      setSearchResult(response.data.searchResult);
-      setTotalPages(
-        Math.ceil(response.data.searchResultCount / recordsPerPage),
-      );
-    } catch (error) {
-      console.error(error);
-    } finally {
+      console.log(response.data);
+      setOrders(response.data.paginatedOrders);
+      setTotalItems(response.data.totalItems);
+      setTotalPages(response.data.totalPages);
       setLoading(false);
-    }
-  };
-
-  const fetchDataFromServer = async () => {
-    try {
-      const response = await axios.get(
-        `http://localhost:3000/api/objednavky/prijate?limit=${recordsPerPage}&startIndex=${startIndex}`,
-      );
-      const orders = response.data.orders;
-      const totalOrdersCount = response.data.totalOrdersCount;
-
-      return { orders, totalOrdersCount };
     } catch (error) {
-      console.error(error);
-      return [];
+      console.error('Chyba při získávání dat z backendu', error);
     }
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        let ordersCount = 0;
-        if (searchQuery && searchResult && searchResult.length > 0) {
-          const slicedSearchResult = searchResult.slice(
-            startIndex,
-            startIndex + recordsPerPage,
-          );
-          setData(slicedSearchResult);
-          ordersCount = searchResult.length;
-        } else {
-          const response = await fetchDataFromServer();
-          setData(response.orders);
-          ordersCount = response.totalOrdersCount;
-        }
-        setTotalPages(Math.ceil(ordersCount / recordsPerPage));
-      } catch (error) {
-        console.error(error);
-      }
-      setLoading(false);
-    };
+    fetchData(page, itemsPerPage, searchTerm);
+  }, [page, itemsPerPage, searchTerm]);
 
-    fetchData();
-  }, [startIndex, searchQuery, searchResult, recordsPerPage]);
+  const handlePageClick = (selectedPage) => {
+    setPage(selectedPage.selected + 1);
+  };
 
-  const handlePageChange = (selectedPage) => {
-    setCurrentPage(selectedPage.selected);
+  const handleSearch = (term) => {
+    setSearchTerm(term);
+    setPage(1);
   };
 
   return (
@@ -101,15 +55,18 @@ function Orders() {
           className="searchInput"
           type="text"
           placeholder="Zadejte hledaný dotaz"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={searchTermTemp}
+          onChange={(e) => setSearchTermTemp(e.target.value)}
         />
-        <button className="searchButton" onClick={handleSearch}>
+        <button
+          className="searchButton"
+          onClick={() => handleSearch(searchTermTemp)}
+        >
           Hledat
         </button>
       </div>
       <RecordsPerPageSelect
-        recordsPerPage={recordsPerPage}
+        recordsPerPage={itemsPerPage}
         onChange={(e) => handleRecordsPerPageChange(e.target.value)}
       />
       {loading ? (
@@ -138,7 +95,7 @@ function Orders() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((order) => (
+                {orders.map((order) => (
                   <tr key={order.id}>
                     <td>{stripCodePrefix(order.uzivatel) || '-'}</td>
                     <>
@@ -191,6 +148,7 @@ function Orders() {
               </tbody>
             </table>
           </div>
+
           <ReactPaginate
             previousLabel={'Předchozí'}
             previousClassName="previous"
@@ -203,17 +161,16 @@ function Orders() {
             pageCount={totalPages}
             marginPagesDisplayed={1}
             pageRangeDisplayed={2}
-            onPageChange={handlePageChange}
+            onPageChange={handlePageClick}
             containerClassName={'pagination'}
             subContainerClassName={'pages pagination'}
             pageClassName="pagination-item"
-            forcePage={currentPage}
+            forcePage={page - 1}
             activeClassName={'pagination-item-active'}
           />
         </div>
       )}
     </div>
   );
-}
-
-export default Orders;
+};
+export default OrdersTable;
